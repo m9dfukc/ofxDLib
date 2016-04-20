@@ -8,6 +8,7 @@
 
 #pragma once
 #include "ofxDLib.h"
+#include "Tracker.h"
 
 typedef struct{
     int label;
@@ -18,7 +19,7 @@ typedef struct{
     ofVec2f leftEyeCenter;
     ofVec2f rightEyeCenter;
     
-    ofPolyline leftEye, rightEye,innerMouth, outerMouth, leftEyebrow, rightEyebrow, jaw, noseBridge, noseTip;
+    ofPolyline leftEye, rightEye, innerMouth, outerMouth, leftEyebrow, rightEyebrow, jaw, noseBridge, noseTip;
 } face;
 
 namespace ofxDLib{
@@ -26,18 +27,21 @@ namespace ofxDLib{
     public:
         void setup(string predictorDatFilePath);
         void findFaces(const ofPixels& pixels, bool bUpscale = false);
-
+        
         void draw();
     protected:
 
         std::vector<dlib::rectangle> dets;
+        std::vector<ofRectangle> boundingBoxes;
     
-        
-        //face tracker
+        // face tracker
         dlib::frontal_face_detector detector;
         dlib::shape_predictor sp;
         std::vector<face> allFaces;
         std::vector<dlib::full_object_detection> shapes;
+        
+        // assign labels
+        RectTracker tracker;
 
     };
 }

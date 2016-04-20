@@ -35,10 +35,16 @@ void FaceTracker::findFaces(const ofPixels& pixels, bool bUpscale){
     
     dets.clear();
     dets = detector(img);
+    
     shapes.clear();
-    for (unsigned long j = 0; j < dets.size(); ++j){
-        shapes.push_back(sp(img, dets[j]));
+    boundingBoxes.clear();
+    
+    for (unsigned int i = 0; i < dets.size(); ++i){
+        shapes.push_back(sp(img, dets[i]));
+        boundingBoxes.push_back(toOf(dets[i]));
     }
+     
+    tracker.track(boundingBoxes);
 }
 //--------------------------------------------------------------
 void FaceTracker::draw(){
@@ -46,12 +52,13 @@ void FaceTracker::draw(){
     
     ofSetColor(ofColor::red);
     ofNoFill();
-    for (auto& r:dets) {
-        ofDrawRectangle(toOf(r));
+    for (unsigned int i = 0; i < dets.size(); ++i){
+        ofDrawRectangle(toOf(dets[i]));
+        ofDrawBitmapString(ofToString(tracker.getCurrentLabels()[i]), dets[i].left(), dets[i].top());
     }
     
     ofFill();
-    ofSetColor(ofColor::red);
+    ofSetColor(ofColor::blue);
     for (auto & s:shapes) {
         for (int i = 0; i < s.num_parts(); i++) {
             ofDrawCircle(toOf(s.part(i)),3);
