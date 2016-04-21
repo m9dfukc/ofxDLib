@@ -337,4 +337,78 @@ namespace ofxDLib {
     };
     
     typedef Tracker<ofVec2f> PointTracker;
+    
+    template <class T>
+    class Follower {
+    protected:
+        bool dead;
+        unsigned int label;
+    public:
+        Follower()
+        :dead(false)
+        ,label(0) {}
+        
+        virtual ~Follower(){};
+        virtual void setup(const T& track) {}
+        virtual void update(const T& track) {}
+        virtual void kill() {
+            dead = true;
+        }
+        
+        void setLabel(unsigned int label) {
+            this->label = label;
+        }
+        unsigned int getLabel() const {
+            return label;
+        }
+        bool getDead() const {
+            return dead;
+        }
+    };
+    
+    typedef Follower<ofRectangle> RectFollower;
+    typedef Follower<ofVec2f> PointFollower;
+    
+    template <class T, class F>
+    class TrackerFollower : public Tracker<T> {
+    protected:
+        std::vector<unsigned int> labels;
+        std::vector<F> followers;
+    public:
+        const std::vector<unsigned int>& track(const std::vector<T>& objects) {
+            Tracker<T>::track(objects);
+            // kill missing, update old
+            for(int i = 0; i < labels.size(); i++) {
+                unsigned int curLabel = labels[i];
+                F& curFollower = followers[i];
+                if(!Tracker<T>::existsCurrent(curLabel)) {
+                    curFollower.kill();
+                } else {
+                    curFollower.update(Tracker<T>::getCurrent(curLabel));
+                }
+            }
+            // add new
+            for(int i = 0; i < Tracker<T>::newLabels.size(); i++) {
+                unsigned int curLabel = Tracker<T>::newLabels[i];
+                labels.push_back(curLabel);
+                followers.push_back(F());
+                followers.back().setup(Tracker<T>::getCurrent(curLabel));
+                followers.back().setLabel(curLabel);
+            }
+            // remove dead
+            for(int i = labels.size() - 1; i >= 0; i--) {
+                if(followers[i].getDead()) {
+                    followers.erase(followers.begin() + i);
+                    labels.erase(labels.begin() + i);
+                }
+            }
+            return labels;
+        }
+        std::vector<F>& getFollowers() {
+            return followers;
+        }
+    };
+    
+    template <class F> class RectTrackerFollower : public TrackerFollower<ofRectangle, F> {};
+    template <class F> class PointTrackerFollower : public TrackerFollower<ofVec2f, F> {};
 }
