@@ -16,6 +16,10 @@ namespace ofxDLib {
         leftEye, rightEye, innerMouth, outerMouth, leftEyebrow, rightEyebrow, jaw, noseBridge, noseTip
     };
     
+    enum DrawStyle {
+        none, lines, circles
+    };
+    
     typedef struct {
         int label;
         int age;
@@ -26,30 +30,36 @@ namespace ofxDLib {
     } Face;
     
     class FaceTracker {
-    public:
-        bool showLines = true;
+    protected:
+        // face tracker
+        dlib::frontal_face_detector detector;
+        dlib::shape_predictor predictor;
+        vector<Face> faces;
+        map<unsigned int, vector<ofVec3f>> smoothed;
+        float smoothingRate;
+        DrawStyle drawStyle;
         
+        // assign labels
+        RectTracker tracker;
+    public:
+        FaceTracker();
         void setup(string predictorDatFilePath);
         void findFaces(const ofPixels& pixels, bool bUpscale = false);
         unsigned int size();
         RectTracker& getTracker();
         Face getFace(unsigned int i);
+        vector<Face>& getFaces();
         ofRectangle getRectangle(unsigned int i);
         vector<ofVec3f> getLandmarks(unsigned int i);
         ofPolyline getShape(unsigned int i, ShapeType t);
         unsigned int getLabel(unsigned int i);
         int getIndexFromLabel(unsigned int label);
         ofVec2f getVelocity(unsigned int i);
+        void setSmoothingRate(float smoothingRate);
+        float getSmoothingRate();
+        void setDrawStyle(DrawStyle style);
         void draw();
-    protected:
-    
-        // face tracker
-        dlib::frontal_face_detector detector;
-        dlib::shape_predictor predictor;
-        vector<Face> faces;
-        
-        // assign labels
-        RectTracker tracker;
+
     };
     
 }

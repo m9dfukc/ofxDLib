@@ -9,6 +9,12 @@
 #include "FaceTracker.h"
 using namespace ofxDLib;
 
+FaceTracker::FaceTracker() {
+    smoothingRate = 0.5;
+    drawStyle = lines;
+    tracker.setSmoothingRate(smoothingRate);
+}
+
 //--------------------------------------------------------------
 void FaceTracker::setup(string predictorDatFilePath) {
     detector = dlib::get_frontal_face_detector();
@@ -37,14 +43,23 @@ void FaceTracker::findFaces(const ofPixels& pixels, bool bUpscale) {
     for (int i=0; i<dets.size(); i++) {
         dlib::full_object_detection shapes = predictor(img, dets[i]);
         unsigned int label = tracker.getLabelFromIndex(i);
+        bool existsPrevious = smoothed.count(label) > 0;
+        vector<ofVec3f> currentLandmarks;
         
         Face face;
         face.label = label;
-        face.rect = toOf(dets[i]);
+        face.rect = tracker.getSmoothed(label);
         face.age = tracker.getAge(label);
         face.velocity = tracker.getVelocity(i);
         for (int j=0; j<shapes.num_parts(); j++) {
-            face.landmarks.push_back(toOf(shapes.part(j)));
+            ofVec3f point;
+            ofVec3f current = toOf(shapes.part(j));
+            ofVec3f previous = existsPrevious ? smoothed[label][j] : current;
+            point.x = ofLerp(previous.x, current.x, smoothingRate);
+            point.y = ofLerp(previous.y, current.y, smoothingRate);
+            
+            currentLandmarks.push_back(current);
+            face.landmarks.push_back(point);
         }
         if (face.landmarks.size() == 68) {
             for (int j=0; j<=16; j++) { // jaw
@@ -95,7 +110,18 @@ void FaceTracker::findFaces(const ofPixels& pixels, bool bUpscale) {
             face.innerMouth.addVertex(face.landmarks[60]);
             face.innerMouth.close();
         }
+        smoothed[label] = currentLandmarks;
         faces.push_back(face);
+        
+        std::map<unsigned int, vector<ofVec3f>>::iterator smoothedItr = smoothed.begin();
+        while(smoothedItr != smoothed.end()) {
+            unsigned int label = smoothedItr->first;
+            if(!tracker.existsCurrent(label)) {
+                smoothed.erase(smoothedItr++);
+            } else {
+                ++smoothedItr;
+            }
+        }
     }
 }
 
@@ -105,13 +131,18 @@ unsigned int FaceTracker::size() {
 }
 
 //--------------------------------------------------------------
-RectTracker& FaceTracker::getTracker() {
+RectTracker & FaceTracker::getTracker() {
     return tracker;
 }
 
 //--------------------------------------------------------------
 Face FaceTracker::getFace(unsigned int i) {
     return faces[i];
+}
+
+//--------------------------------------------------------------
+vector<Face> & FaceTracker::getFaces() {
+    return faces;
 }
 
 //--------------------------------------------------------------
@@ -186,6 +217,22 @@ ofVec2f FaceTracker::getVelocity(unsigned int i) {
 }
 
 //--------------------------------------------------------------
+void FaceTracker::setSmoothingRate(float smoothingRate) {
+    this->smoothingRate = smoothingRate;
+    tracker.setSmoothingRate(smoothingRate);
+}
+
+//--------------------------------------------------------------
+float FaceTracker::getSmoothingRate() {
+    return smoothingRate;
+}
+
+//--------------------------------------------------------------
+void FaceTracker::setDrawStyle(DrawStyle style) {
+    this->drawStyle = style;
+}
+
+//--------------------------------------------------------------
 void FaceTracker::draw() {
     ofPushStyle();
     
@@ -195,20 +242,26 @@ void FaceTracker::draw() {
     for (auto & face : faces) {
         ofDrawBitmapString(ofToString(face.label), face.rect.getTopLeft());
         ofDrawRectangle(face.rect);
-        if (showLines) {
-            face.leftEye.draw();
-            face.rightEye.draw();
-            face.innerMouth.draw();
-            face.outerMouth.draw();
-            face.leftEyebrow.draw();
-            face.rightEyebrow.draw();
-            face.jaw.draw();
-            face.noseBridge.draw();
-            face.noseTip.draw();
-        } else {
-            for (auto & landmark : face.landmarks) {
-                ofDrawCircle(landmark, 3);
-            }
+        
+        switch (drawStyle) {
+            case lines:
+                face.leftEye.draw();
+                face.rightEye.draw();
+                face.innerMouth.draw();
+                face.outerMouth.draw();
+                face.leftEyebrow.draw();
+                face.rightEyebrow.draw();
+                face.jaw.draw();
+                face.noseBridge.draw();
+                face.noseTip.draw();
+                break;
+            case circles:
+                for (auto & landmark : face.landmarks) {
+                    ofDrawCircle(landmark, 3);
+                }
+                break;
+            case none:
+                break;
         }
         
     }
