@@ -58,7 +58,7 @@ void FaceTracker::findFaces(const ofPixels& pixels, bool bUpscale) {
             point.x = ofLerp(previous.x, current.x, smoothingRate);
             point.y = ofLerp(previous.y, current.y, smoothingRate);
             
-            currentLandmarks.push_back(current);
+            currentLandmarks.push_back(point);
             face.landmarks.push_back(point);
         }
         if (face.landmarks.size() == 68) {
