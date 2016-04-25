@@ -35,7 +35,8 @@ namespace ofxDLib {
         dlib::frontal_face_detector detector;
         dlib::shape_predictor predictor;
         vector<Face> faces;
-        map<unsigned int, vector<ofVec3f>> smoothed;
+        map<unsigned int, vector<ofVec3f>> shapeHistory;
+        map<unsigned int, float> smoothingRatePerFace;
         float smoothingRate;
         DrawStyle drawStyle;
         
@@ -56,7 +57,9 @@ namespace ofxDLib {
         int getIndexFromLabel(unsigned int label);
         ofVec2f getVelocity(unsigned int i);
         void setSmoothingRate(float smoothingRate);
+        void setSmoothingRate(unsigned int label, float smoothingRate);
         float getSmoothingRate();
+        float getSmoothingRate(unsigned int label);
         void setDrawStyle(DrawStyle style);
         void draw();
 

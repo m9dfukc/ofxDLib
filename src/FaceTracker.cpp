@@ -41,10 +41,13 @@ void FaceTracker::findFaces(const ofPixels& pixels, bool bUpscale) {
     tracker.track(toOf(dets));
     
     for (int i=0; i<dets.size(); i++) {
+        vector<ofVec3f> currentLandmarks;
         dlib::full_object_detection shapes = predictor(img, dets[i]);
         unsigned int label = tracker.getLabelFromIndex(i);
-        bool existsPrevious = smoothed.count(label) > 0;
-        vector<ofVec3f> currentLandmarks;
+        bool existsShapeHistory = shapeHistory.count(label) > 0;
+        bool existsSmoothingPerFace = smoothingRatePerFace.count(label) > 0;
+        if (!existsSmoothingPerFace) smoothingRatePerFace[label] = smoothingRate;
+        float currentSmoothingRate = smoothingRatePerFace[label];
         
         Face face;
         face.label = label;
@@ -54,9 +57,9 @@ void FaceTracker::findFaces(const ofPixels& pixels, bool bUpscale) {
         for (int j=0; j<shapes.num_parts(); j++) {
             ofVec3f point;
             ofVec3f current = toOf(shapes.part(j));
-            ofVec3f previous = existsPrevious ? smoothed[label][j] : current;
-            point.x = ofLerp(previous.x, current.x, smoothingRate);
-            point.y = ofLerp(previous.y, current.y, smoothingRate);
+            ofVec3f previous = existsShapeHistory ? shapeHistory[label][j] : current;
+            point.x = ofLerp(previous.x, current.x, currentSmoothingRate);
+            point.y = ofLerp(previous.y, current.y, currentSmoothingRate);
             
             currentLandmarks.push_back(point);
             face.landmarks.push_back(point);
@@ -110,16 +113,17 @@ void FaceTracker::findFaces(const ofPixels& pixels, bool bUpscale) {
             face.innerMouth.addVertex(face.landmarks[60]);
             face.innerMouth.close();
         }
-        smoothed[label] = currentLandmarks;
+        shapeHistory[label] = currentLandmarks;
         faces.push_back(face);
         
-        std::map<unsigned int, vector<ofVec3f>>::iterator smoothedItr = smoothed.begin();
-        while(smoothedItr != smoothed.end()) {
-            unsigned int label = smoothedItr->first;
+        std::map<unsigned int, vector<ofVec3f>>::iterator shapeHistoryItr = shapeHistory.begin();
+        while(shapeHistoryItr != shapeHistory.end()) {
+            unsigned int label = shapeHistoryItr->first;
             if(!tracker.existsCurrent(label)) {
-                smoothed.erase(smoothedItr++);
+                shapeHistory.erase(shapeHistoryItr++);
+                smoothingRatePerFace.erase(label); // dirty but should do it for now
             } else {
-                ++smoothedItr;
+                ++shapeHistoryItr;
             }
         }
     }
@@ -223,8 +227,24 @@ void FaceTracker::setSmoothingRate(float smoothingRate) {
 }
 
 //--------------------------------------------------------------
+void FaceTracker::setSmoothingRate(unsigned int label, float smoothingRate) {
+    if (smoothingRatePerFace.count(label) > 0) {
+        smoothingRatePerFace[label] = smoothingRate;
+    }
+}
+
+//--------------------------------------------------------------
 float FaceTracker::getSmoothingRate() {
     return smoothingRate;
+}
+
+//--------------------------------------------------------------
+float FaceTracker::getSmoothingRate(unsigned int label) {
+    if (smoothingRatePerFace.count(label) > 0) {
+        return smoothingRatePerFace[label];
+    } else {
+        return 1.0;
+    }
 }
 
 //--------------------------------------------------------------
