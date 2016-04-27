@@ -31,136 +31,74 @@ void FaceTracker::setup(string predictorDatFilePath) {
 
 //--------------------------------------------------------------
 void FaceTracker::findFaces(const ofPixels& pixels, bool bUpscale) {
-    faces.clear();
-    
     dlib::array2d<dlib::rgb_pixel> img;
     toDLib(pixels, img);
     if (bUpscale) pyramid_up(img);
     
     std::vector<dlib::rectangle> dets = detector(img);
-    tracker.track(toOf(dets));
-    
+    std::vector<Face> facesCur;
     for (int i=0; i<dets.size(); i++) {
-        vector<ofVec3f> currentLandmarks;
         dlib::full_object_detection shapes = predictor(img, dets[i]);
-        unsigned int label = tracker.getLabelFromIndex(i);
-        bool existsShapeHistory = shapeHistory.count(label) > 0;
-        bool existsSmoothingPerFace = smoothingRatePerFace.count(label) > 0;
-        if (!existsSmoothingPerFace) smoothingRatePerFace[label] = smoothingRate;
-        float currentSmoothingRate = smoothingRatePerFace[label];
-        
-        Face face;
-        face.label = label;
-        face.rect = tracker.getSmoothed(label);
-        face.age = tracker.getAge(label);
-        face.velocity = tracker.getVelocity(i);
+        vector<ofVec3f> landmarks;
         for (int j=0; j<shapes.num_parts(); j++) {
-            ofVec3f point;
-            ofVec3f current = toOf(shapes.part(j));
-            ofVec3f previous = existsShapeHistory ? shapeHistory[label][j] : current;
-            point.x = ofLerp(previous.x, current.x, currentSmoothingRate);
-            point.y = ofLerp(previous.y, current.y, currentSmoothingRate);
-            
-            currentLandmarks.push_back(point);
-            face.landmarks.push_back(point);
+            ofVec3f p(shapes.part(j).x(), shapes.part(j).y(), 0);
+            landmarks.push_back(p);
         }
-        if (face.landmarks.size() == 68) {
-            for (int j=0; j<=16; j++) { // jaw
-                face.jaw.addVertex(face.landmarks[j]);
-            }
-            
-            for (int j=17; j<=21; j++) { // leftEyebrow
-                face.leftEyebrow.addVertex(face.landmarks[j]);
-            }
-            
-            for (int j=22; j<=26; j++) { // rightEyebrow
-                face.rightEyebrow.addVertex(face.landmarks[j]);
-            }
-            
-            for (int j=27; j<=30; j++) { // noseBridge
-                face.noseBridge.addVertex(face.landmarks[j]);
-            }
-            
-            for (int j=30; j<=35; j++) { // noseTip
-                face.noseTip.addVertex(face.landmarks[j]);
-            }
-            face.noseTip.addVertex(face.landmarks[30]);
-            face.noseTip.close();
-            
-            for (int j=36; j<=41; j++) { // leftEye
-                face.leftEye.addVertex(face.landmarks[j]);
-            }
-            face.leftEye.addVertex(face.landmarks[36]);
-            face.leftEye.close();
-            face.leftEyeCenter = face.leftEye.getCentroid2D();
-            
-            for (int j=42; j<=47; j++) { // rightEye
-                face.rightEye.addVertex(face.landmarks[j]);
-            }
-            face.rightEye.addVertex(face.landmarks[42]);
-            face.rightEye.close();
-            face.rightEyeCenter = face.rightEye.getCentroid2D();
-            
-            for (int j=48; j<=59; j++) { // outerMouth
-                face.outerMouth.addVertex(face.landmarks[j]);
-            }
-            face.outerMouth.addVertex(face.landmarks[48]);
-            face.outerMouth.close();
-            
-            for (int j=60; j<=67; j++) { // innerMouth
-                face.innerMouth.addVertex(face.landmarks[j]);
-            }
-            face.innerMouth.addVertex(face.landmarks[60]);
-            face.innerMouth.close();
-        }
-        shapeHistory[label] = currentLandmarks;
-        faces.push_back(face);
+        Face face;
+        face.rect = toOf(dets[i]);
+        face.landmarks = landmarks;
         
-        std::map<unsigned int, vector<ofVec3f>>::iterator shapeHistoryItr = shapeHistory.begin();
-        while(shapeHistoryItr != shapeHistory.end()) {
-            unsigned int label = shapeHistoryItr->first;
-            if(!tracker.existsCurrent(label)) {
-                shapeHistory.erase(shapeHistoryItr++);
-                smoothingRatePerFace.erase(label); // dirty but should do it for now
-            } else {
-                ++shapeHistoryItr;
-            }
-        }
+        facesCur.push_back(face);
     }
+    tracker.track(facesCur);
 }
 
 //--------------------------------------------------------------
 unsigned int FaceTracker::size() {
-    return faces.size();
+    return tracker.getCurrentLabels().size();
 }
 
 //--------------------------------------------------------------
-RectTracker & FaceTracker::getTracker() {
+ShapeTracker & FaceTracker::getTracker() {
     return tracker;
 }
 
 //--------------------------------------------------------------
 Face FaceTracker::getFace(unsigned int i) {
-    return faces[i];
+    unsigned int label = tracker.getLabelFromIndex(i);
+    
+    Face face = tracker.getCurrent(label);
+    face.label = label;
+    face.age = tracker.getAge(label);
+    face.velocity = tracker.getVelocity(i);
+    face = assignFeatures(face);
+    
+    return face;
 }
 
 //--------------------------------------------------------------
-vector<Face> & FaceTracker::getFaces() {
+vector<Face> FaceTracker::getFaces() {
+    vector<Face> faces;
+    for (int i=0; i < this->size(); i++) {
+        faces.push_back(this->getFace(i));
+    }
     return faces;
 }
 
 //--------------------------------------------------------------
 ofRectangle FaceTracker::getRectangle(unsigned int i) {
-    return faces[i].rect;
+    unsigned int label = tracker.getLabelFromIndex(i);
+    return tracker.getCurrent(label).rect;
 }
 
 //--------------------------------------------------------------
 vector<ofVec3f> FaceTracker::getLandmarks(unsigned int i) {
-    return faces[i].landmarks;
+    unsigned int label = tracker.getLabelFromIndex(i);
+    return tracker.getCurrent(label).landmarks;
 }
 
 ofPolyline FaceTracker::getShape(unsigned int i, ShapeType t) {
-    Face face = faces[i];
+    Face face = this->getFace(i);
     ofPolyline out;
     
     switch (t) {
@@ -200,51 +138,37 @@ ofPolyline FaceTracker::getShape(unsigned int i, ShapeType t) {
 
 //--------------------------------------------------------------
 unsigned int FaceTracker::getLabel(unsigned int i) {
-    return faces[i].label;
+    return tracker.getLabelFromIndex(i);
 }
 
 //--------------------------------------------------------------
 int FaceTracker::getIndexFromLabel(unsigned int label) {
-    int index = -1;
-    for (int i=0; i<faces.size(); i++) {
-        if (faces[i].label == label) {
-            index = i;
-            break;
-        }
-    }
-    return index;
+    return tracker.getIndexFromLabel(label);
 }
 
 //--------------------------------------------------------------
 ofVec2f FaceTracker::getVelocity(unsigned int i) {
-    return faces[i].velocity;
+    return tracker.getVelocity(i);
 }
 
 //--------------------------------------------------------------
 void FaceTracker::setSmoothingRate(float smoothingRate) {
-    this->smoothingRate = smoothingRate;
     tracker.setSmoothingRate(smoothingRate);
 }
 
 //--------------------------------------------------------------
 void FaceTracker::setSmoothingRate(unsigned int label, float smoothingRate) {
-    if (smoothingRatePerFace.count(label) > 0) {
-        smoothingRatePerFace[label] = smoothingRate;
-    }
+    tracker.setSmoothingRate(label, smoothingRate);
 }
 
 //--------------------------------------------------------------
 float FaceTracker::getSmoothingRate() {
-    return smoothingRate;
+    return tracker.getSmoothingRate();
 }
 
 //--------------------------------------------------------------
 float FaceTracker::getSmoothingRate(unsigned int label) {
-    if (smoothingRatePerFace.count(label) > 0) {
-        return smoothingRatePerFace[label];
-    } else {
-        return 1.0;
-    }
+    return tracker.getSmoothingRate(label);
 }
 
 //--------------------------------------------------------------
@@ -259,7 +183,7 @@ void FaceTracker::draw() {
     ofSetColor(ofColor::red);
     ofNoFill();
     
-    for (auto & face : faces) {
+    for (auto & face : this->getFaces()) {
         ofDrawBitmapString(ofToString(face.label), face.rect.getTopLeft());
         ofDrawRectangle(face.rect);
         
@@ -287,4 +211,59 @@ void FaceTracker::draw() {
     }
     
     ofPopStyle();
+}
+
+//--------------------------------------------------------------
+Face& FaceTracker::assignFeatures(Face & face) {
+    if (face.landmarks.size() == 68) {
+        for (int j=0; j<=16; j++) { // jaw
+            face.jaw.addVertex(face.landmarks[j]);
+        }
+        
+        for (int j=17; j<=21; j++) { // leftEyebrow
+            face.leftEyebrow.addVertex(face.landmarks[j]);
+        }
+        
+        for (int j=22; j<=26; j++) { // rightEyebrow
+            face.rightEyebrow.addVertex(face.landmarks[j]);
+        }
+        
+        for (int j=27; j<=30; j++) { // noseBridge
+            face.noseBridge.addVertex(face.landmarks[j]);
+        }
+        
+        for (int j=30; j<=35; j++) { // noseTip
+            face.noseTip.addVertex(face.landmarks[j]);
+        }
+        face.noseTip.addVertex(face.landmarks[30]);
+        face.noseTip.close();
+        
+        for (int j=36; j<=41; j++) { // leftEye
+            face.leftEye.addVertex(face.landmarks[j]);
+        }
+        face.leftEye.addVertex(face.landmarks[36]);
+        face.leftEye.close();
+        face.leftEyeCenter = face.leftEye.getCentroid2D();
+        
+        for (int j=42; j<=47; j++) { // rightEye
+            face.rightEye.addVertex(face.landmarks[j]);
+        }
+        face.rightEye.addVertex(face.landmarks[42]);
+        face.rightEye.close();
+        face.rightEyeCenter = face.rightEye.getCentroid2D();
+        
+        for (int j=48; j<=59; j++) { // outerMouth
+            face.outerMouth.addVertex(face.landmarks[j]);
+        }
+        face.outerMouth.addVertex(face.landmarks[48]);
+        face.outerMouth.close();
+        
+        for (int j=60; j<=67; j++) { // innerMouth
+            face.innerMouth.addVertex(face.landmarks[j]);
+        }
+        face.innerMouth.addVertex(face.landmarks[60]);
+        face.innerMouth.close();
+    }
+    
+    return face;
 }

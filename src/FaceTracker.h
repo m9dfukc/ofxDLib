@@ -29,27 +29,109 @@ namespace ofxDLib {
         vector<ofVec3f> landmarks;
     } Face;
     
+    float trackingDistance(const Face& a, const Face& b) {
+        ofVec3f aCenter = a.rect.getCenter();
+        ofVec3f bCenter = b.rect.getCenter();
+        return aCenter.distance(bCenter);
+    };
+    
+    class ShapeTracker : public Tracker<Face> {
+    protected:
+        float initSmoothingRate;
+        std::map<unsigned int, float> smoothingRate;
+        std::map<unsigned int, Face> smoothed;
+    public:
+        ShapeTracker()
+        :initSmoothingRate(.5) {
+        }
+        void setSmoothingRate(float smoothingRate) {
+            this->initSmoothingRate = smoothingRate;
+        }
+        void setSmoothingRate(unsigned int label, float smoothingRate) {
+            this->smoothingRate[label] = smoothingRate;
+        }
+        float getSmoothingRate() const {
+            return initSmoothingRate;
+        }
+        float getSmoothingRate(unsigned int label) {
+            if (this->smoothingRate.count(label) > 0) return this->smoothingRate[label];
+            else return initSmoothingRate;
+        }
+        const std::vector<unsigned int>& track(const std::vector<Face>& objects) {
+            const std::vector<unsigned int>& labels = Tracker<Face>::track(objects);
+            // add new objects, update old objects
+            for(int i = 0; i < labels.size(); i++) {
+                unsigned int label = labels[i];
+                const Face& cur = getCurrent(label);
+                const float smoothingRateCur = getSmoothingRate(label);
+                if(smoothed.count(label) > 0) {
+                    Face& smooth = smoothed[label];
+                    smooth.rect.x = ofLerp(smooth.rect.x, cur.rect.x, smoothingRateCur);
+                    smooth.rect.y = ofLerp(smooth.rect.y, cur.rect.y, smoothingRateCur);
+                    smooth.rect.width = ofLerp(smooth.rect.width, cur.rect.width, smoothingRateCur);
+                    smooth.rect.height = ofLerp(smooth.rect.height, cur.rect.height, smoothingRateCur);
+                    for (int j=0; j<smooth.landmarks.size(); j++) {
+                        ofVec3f & smoothLandmark = smooth.landmarks[j];
+                        const ofVec3f & curLandmark = cur.landmarks[j];
+                        smoothLandmark.x = ofLerp(smoothLandmark.x, curLandmark.x, smoothingRateCur);
+                        smoothLandmark.y = ofLerp(smoothLandmark.y, curLandmark.y, smoothingRateCur);
+                    }
+                } else {
+                    smoothingRate[label] = initSmoothingRate;
+                    smoothed[label] = cur;
+                }
+            }
+            std::map<unsigned int, Face>::iterator smoothedItr = smoothed.begin();
+            while(smoothedItr != smoothed.end()) {
+                unsigned int label = smoothedItr->first;
+                if(!existsCurrent(label)) {
+                    smoothed.erase(smoothedItr++);
+                    smoothingRate.erase(label);
+                } else {
+                    ++smoothedItr;
+                }
+            }
+            return labels;
+        }
+        const Face& getSmoothed(unsigned int label) const {
+            return smoothed.find(label)->second;
+        }
+        ofVec2f getVelocity(unsigned int i) const {
+            unsigned int label = getLabelFromIndex(i);
+            if(existsPrevious(label)) {
+                const Face& previous = getPrevious(label);
+                const Face& current = getCurrent(label);
+                ofVec2f previousPosition(previous.rect.x + previous.rect.width / 2, previous.rect.y + previous.rect.height / 2);
+                ofVec2f currentPosition(current.rect.x + current.rect.width / 2, current.rect.y + current.rect.height / 2);
+                return currentPosition - previousPosition;
+            } else {
+                return ofVec2f(0, 0);
+            }
+        }
+    };
+
+    
     class FaceTracker {
     protected:
         // face tracker
         dlib::frontal_face_detector detector;
         dlib::shape_predictor predictor;
-        vector<Face> faces;
+
         map<unsigned int, vector<ofVec3f>> shapeHistory;
         map<unsigned int, float> smoothingRatePerFace;
         float smoothingRate;
         DrawStyle drawStyle;
+        ShapeTracker tracker;
         
-        // assign labels
-        RectTracker tracker;
+        Face& assignFeatures(Face & face);
     public:
         FaceTracker();
         void setup(string predictorDatFilePath);
         void findFaces(const ofPixels& pixels, bool bUpscale = false);
         unsigned int size();
-        RectTracker& getTracker();
+        ShapeTracker& getTracker();
         Face getFace(unsigned int i);
-        vector<Face>& getFaces();
+        vector<Face> getFaces();
         ofRectangle getRectangle(unsigned int i);
         vector<ofVec3f> getLandmarks(unsigned int i);
         ofPolyline getShape(unsigned int i, ShapeType t);
