@@ -67,7 +67,7 @@ ShapeTracker & FaceTracker::getTracker() {
 Face FaceTracker::getFace(unsigned int i) {
     unsigned int label = tracker.getLabelFromIndex(i);
     
-    Face face = tracker.getCurrent(label);
+    Face face = tracker.getSmoothed(label);
     face.label = label;
     face.age = tracker.getAge(label);
     face.velocity = tracker.getVelocity(i);
