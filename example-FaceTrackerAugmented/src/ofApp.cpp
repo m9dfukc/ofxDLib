@@ -44,9 +44,9 @@ void FaceAugmented::draw() {
 
 //--------------------------------------------------------------
 void ofApp::setup(){
-    ft.setup("shape_predictor_68_face_landmarks.dat");
-    ft.setSmoothingRate(0.5);
-    ft.setDrawStyle(ofxDLib::lines);
+    tracker.setup("shape_predictor_68_face_landmarks.dat");
+    tracker.setSmoothingRate(0.15);
+    tracker.setDrawStyle(ofxDLib::lines);
     
     video.setDeviceID(0);
     video.setup(720, 480);
@@ -56,8 +56,7 @@ void ofApp::setup(){
 void ofApp::update(){
     video.update();
     if(video.isFrameNew()){
-        ft.findFaces(video.getPixels());
-        tracker.track(ft.getFaces());
+        tracker.findFaces(video.getPixels());
         vector<FaceAugmented>& facesAugmented = tracker.getFollowers();
         for (auto & face : facesAugmented) {
             face.setImage(video.getPixels());
@@ -73,5 +72,5 @@ void ofApp::draw(){
     for (auto & face : facesAugmented) {
         face.draw();
     }
-    ft.draw();
+    tracker.draw();
 }

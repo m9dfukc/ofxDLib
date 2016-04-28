@@ -29,10 +29,8 @@ public:
     void update();
     void draw();
     
-    ofxDLib::FaceTracker ft;
     ofVideoGrabber video;
-    
-    ofxDLib::TrackerFollower<ofxDLib::Face, FaceAugmented> tracker;
+    ofxDLib::FaceTrackerFollower<FaceAugmented> tracker;
     
     
 };
