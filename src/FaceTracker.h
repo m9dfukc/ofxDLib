@@ -109,7 +109,6 @@ namespace ofxDLib {
             }
         }
     };
-
     
     class FaceTracker {
     protected:
@@ -145,6 +144,48 @@ namespace ofxDLib {
         void setDrawStyle(DrawStyle style);
         void draw();
 
+    };
+    
+    template <class F>
+    class FaceTrackerFollower : public FaceTracker {
+    protected:
+        std::vector<unsigned int> labels;
+        std::vector<F> followers;
+    public:
+        FaceTrackerFollower() : FaceTracker() {};
+        const std::vector<unsigned int>& findFaces(const ofPixels& pixels, bool bUpscale = false) {
+            FaceTracker::findFaces(pixels);
+            ShapeTracker & tracker = FaceTracker::getTracker();
+            
+            // kill missing, update old
+            for(int i = 0; i < labels.size(); i++) {
+                unsigned int curLabel = labels[i];
+                F& curFollower = followers[i];
+                if(!tracker.existsCurrent(curLabel)) {
+                    curFollower.kill();
+                } else {
+                    curFollower.update(tracker.getCurrent(curLabel));
+                }
+            }
+            // add new
+            for(auto & curLabel : tracker.getNewLabels()) {
+                labels.push_back(curLabel);
+                followers.push_back(F());
+                followers.back().setup(tracker.getCurrent(curLabel));
+                followers.back().setLabel(curLabel);
+            }
+            // remove dead
+            for(int i = labels.size() - 1; i >= 0; i--) {
+                if(followers[i].getDead()) {
+                    followers.erase(followers.begin() + i);
+                    labels.erase(labels.begin() + i);
+                }
+            }
+            return labels;
+        };
+        std::vector<F>& getFollowers() {
+            return followers;
+        };
     };
     
 }

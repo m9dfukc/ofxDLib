@@ -267,3 +267,4 @@ Face& FaceTracker::assignFeatures(Face & face) {
     
     return face;
 }
+
