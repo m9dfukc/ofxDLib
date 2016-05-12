@@ -98,11 +98,26 @@ namespace ofxDLib {
         }
         ofVec2f getVelocity(unsigned int i) const {
             unsigned int label = getLabelFromIndex(i);
-            if(existsPrevious(label)) {
+            if(existsCurrent(label) && existsPrevious(label)) {
                 const Face& previous = getPrevious(label);
                 const Face& current = getCurrent(label);
-                ofVec2f previousPosition(previous.rect.x + previous.rect.width / 2, previous.rect.y + previous.rect.height / 2);
-                ofVec2f currentPosition(current.rect.x + current.rect.width / 2, current.rect.y + current.rect.height / 2);
+                
+                const float prvX = previous.rect.x;
+                const float prvY = previous.rect.y;
+                const float prvW = previous.rect.width;
+                const float prvH = previous.rect.height;
+                const float pX = prvX + (prvW / 2.0);
+                const float pY = prvY + (prvH / 2.0);
+                ofVec2f previousPosition(pX, pY);
+                
+                const float curX = current.rect.x;
+                const float curY = current.rect.y;
+                const float curW = current.rect.width;
+                const float curH = current.rect.height;
+                const float cX = curX + (curW / 2.0);
+                const float cY = curY + (curH / 2.0);
+                ofVec2f currentPosition(cX, cY);
+                
                 return currentPosition - previousPosition;
             } else {
                 return ofVec2f(0, 0);
