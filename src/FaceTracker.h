@@ -161,6 +161,7 @@ namespace ofxDLib {
 
     };
     
+    
     template <class F>
     class FaceTrackerFollower : public FaceTracker {
     protected:
@@ -179,15 +180,30 @@ namespace ofxDLib {
                 if(!tracker.existsCurrent(curLabel)) {
                     curFollower.kill();
                 } else {
-                    curFollower.update(tracker.getCurrent(curLabel));
+                    Face face = tracker.getSmoothed(curLabel);
+                    face.label = curLabel;
+                    face.age = tracker.getAge(curLabel);
+                    face.velocity = tracker.getVelocity(i);
+                    face = FaceTracker::assignFeatures(face);
+                    
+                    curFollower.update(face);
                 }
             }
             // add new
+            int index = 0;
             for(auto & curLabel : tracker.getNewLabels()) {
+                Face face = tracker.getSmoothed(curLabel);
+                face.label = curLabel;
+                face.age = tracker.getAge(curLabel);
+                face.velocity = tracker.getVelocity(index);
+                face = FaceTracker::assignFeatures(face);
+                
                 labels.push_back(curLabel);
                 followers.push_back(F());
-                followers.back().setup(tracker.getCurrent(curLabel));
+                followers.back().setup(face);
                 followers.back().setLabel(curLabel);
+                
+                index++;
             }
             // remove dead
             for(int i = labels.size() - 1; i >= 0; i--) {
