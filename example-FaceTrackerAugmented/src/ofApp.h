@@ -11,6 +11,7 @@ protected:
     ofVec2f cur, smooth;
     ofPolyline all;
     ofxDLib::Face face;
+    float startedDying;
 public:
     FaceAugmented(){
     };
